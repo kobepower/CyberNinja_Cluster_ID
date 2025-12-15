@@ -631,8 +631,69 @@ class LuxuryClusterGuide(ctk.CTk):
             years = sorted(self.db[make][model].keys(), reverse=True)
             self.year_cb.configure(values=years)
 
+    # =======================
+    # New Helper Methods (from ChatGPT suggestions)
+    # =======================
+    def create_expandable_section(self, title, content_widget, color=CYBER_CYAN):
+        """Creates a clickable expandable section with custom content widget inside"""
+        section_frame = ctk.CTkFrame(self.info_scroll, fg_color="#1a1a2e", corner_radius=8)
+        section_frame.pack(fill="x", pady=5, padx=10)
+        
+        header = ctk.CTkButton(section_frame, text=f"▶ {title}", font=("Consolas", 12, "bold"),
+                               fg_color=color, hover_color="#00cccc", text_color="#000",
+                               corner_radius=8, height=40, anchor="w")
+        header.pack(fill="x", padx=5, pady=5)
+        
+        content_frame = ctk.CTkFrame(section_frame, fg_color="#0a0a15", corner_radius=8)
+        content_frame.pack(fill="x", padx=10, pady=(0, 10))
+        
+        content_widget(content_frame)
+        
+        # Start collapsed
+        content_frame.pack_forget()
+        
+        def toggle():
+            if content_frame.winfo_ismapped():
+                content_frame.pack_forget()
+                header.configure(text=header.cget("text").replace("▼", "▶"))
+            else:
+                content_frame.pack(fill="x", padx=10, pady=(0, 10))
+                header.configure(text=header.cget("text").replace("▶", "▼"))
+        
+        header.configure(command=toggle)
+        return section_frame
+
+    def create_tooltip(self, widget, text):
+        """Simple hover tooltip using Toplevel"""
+        tooltip = None
+        
+        def enter(event):
+            nonlocal tooltip
+            x = widget.winfo_rootx() + widget.winfo_width() + 5
+            y = widget.winfo_rooty() + widget.winfo_height() // 2
+            tooltip = tk.Toplevel(widget)
+            tooltip.wm_overrideredirect(True)
+            tooltip.wm_geometry(f"+{x}+{y}")
+            label = tk.Label(tooltip, text=text, background="#333333", foreground="#ffffff",
+                             font=("Consolas", 10), padx=8, pady=4, relief="solid", borderwidth=1)
+            label.pack()
+        
+        def leave(event):
+            nonlocal tooltip
+            if tooltip:
+                tooltip.destroy()
+                tooltip = None
+        
+        widget.bind("<Enter>", enter)
+        widget.bind("<Leave>", leave)
+
+    def copy_to_clipboard(self, text):
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        messagebox.showinfo("Copied", "Text copied to clipboard!")
+
     def display_info(self, *args):
-        """Display vehicle information"""
+        """Display vehicle information with all new interactive features"""
         make = self.make_var.get()
         model = self.model_var.get()
         year_range = self.year_var.get()
@@ -657,7 +718,7 @@ class LuxuryClusterGuide(ctk.CTk):
         ctk.CTkLabel(header, text=f"{make} {model} ({year_range})",
                      font=("Consolas", 20, "bold"), text_color=CYBER_CYAN).pack(pady=15)
         
-        # Difficulty Badge
+        # Difficulty Badge with tooltip
         difficulty = data.get("difficulty", "Unknown")
         diff_colors = {
             "Basic": CYBER_GREEN,
@@ -669,82 +730,31 @@ class LuxuryClusterGuide(ctk.CTk):
         
         diff_frame = ctk.CTkFrame(header, fg_color=diff_color, corner_radius=5)
         diff_frame.pack(pady=(0, 10))
-        ctk.CTkLabel(diff_frame, text=f"  Difficulty: {difficulty}  ",
-                     font=("Consolas", 11, "bold"), text_color="#000").pack(padx=10, pady=5)
-        
+        diff_label = ctk.CTkLabel(diff_frame, text=f"  Difficulty: {difficulty}  ",
+                                  font=("Consolas", 11, "bold"), text_color="#000")
+        diff_label.pack(padx=10, pady=5)
+        self.create_tooltip(diff_label, "Complexity level of key programming job")
+
         # System Type Badge
         system_type = data.get("system_type", "Unknown")
         sys_frame = ctk.CTkFrame(header, fg_color=CYBER_CYAN, corner_radius=5)
         sys_frame.pack(pady=(0, 10))
-        ctk.CTkLabel(sys_frame, text=f"  System: {system_type}  ",
-                     font=("Consolas", 11, "bold"), text_color="#000").pack(padx=10, pady=5)
-        
-        # CAN PROGRAM Badge - CRITICAL INFO
+        sys_label = ctk.CTkLabel(sys_frame, text=f"  System: {system_type}  ",
+                                 font=("Consolas", 11, "bold"), text_color="#000")
+        sys_label.pack(padx=10, pady=5)
+        self.create_tooltip(sys_label, "Immobilizer system type")
+
+        # CAN PROGRAM Badge
         can_program = data.get("can_program", "Unknown")
         can_color = CYBER_GREEN if "Yes" in can_program else CYBER_RED
         can_frame = ctk.CTkFrame(header, fg_color=can_color, corner_radius=5)
         can_frame.pack(pady=(0, 15))
-        ctk.CTkLabel(can_frame, text=f"  CAN YOU PROGRAM: {can_program.upper()}  ",
-                     font=("Consolas", 12, "bold"), text_color="#000").pack(padx=15, pady=8)
-        
-        # Cluster Information Section
-        self.create_section("⚠️ CLUSTER REMOVAL", data.get("cluster_removal", "Unknown"), CYBER_RED)
-        
-        if data.get("clusters"):
-            cluster_frame = ctk.CTkFrame(self.info_scroll, fg_color="#1a1a2e", corner_radius=8)
-            cluster_frame.pack(fill="x", pady=10, padx=10)
-            
-            ctk.CTkLabel(cluster_frame, text="📋 Locked Cluster Part Numbers:",
-                        font=("Consolas", 11, "bold"), text_color=CYBER_YELLOW).pack(anchor="w", padx=15, pady=(10, 5))
-            
-            clusters_text = ctk.CTkTextbox(cluster_frame, height=100, font=("Consolas", 10),
-                                          fg_color="#0a0a15", text_color=CYBER_GREEN)
-            clusters_text.pack(fill="x", padx=15, pady=(0, 10))
-            
-            cluster_list = ", ".join(data["clusters"])
-            clusters_text.insert("1.0", cluster_list)
-            clusters_text.configure(state="disabled")
-        
-        # BCM Location
-        self.create_section("📍 BCM/Control Module Location", data.get("bcm_location", "Unknown"), CYBER_CYAN)
-        
-        # Programming Method
-        self.create_section("🔧 Programming Method", data.get("programming_method", "Unknown"), CYBER_ACCENT)
-        
-        # Key Type
-        self.create_section("🔑 Key FCC/Part Number", data.get("key_type", "Unknown"), CYBER_GREEN)
-        
-        # Required Adapters
-        if data.get("xhorse_adapters"):
-            adapter_frame = ctk.CTkFrame(self.info_scroll, fg_color="#1a2a1a", corner_radius=8)
-            adapter_frame.pack(fill="x", pady=10, padx=10)
-            
-            ctk.CTkLabel(adapter_frame, text="🔌 Required Xhorse Adapters:",
-                        font=("Consolas", 12, "bold"), text_color=CYBER_GREEN).pack(anchor="w", padx=15, pady=(10, 5))
-            
-            for adapter in data["xhorse_adapters"]:
-                adapter_item = ctk.CTkFrame(adapter_frame, fg_color="#0a150a", corner_radius=5)
-                adapter_item.pack(fill="x", padx=15, pady=5)
-                ctk.CTkLabel(adapter_item, text=f"  ✓ {adapter}",
-                            font=("Consolas", 11), text_color="#fff").pack(anchor="w", padx=10, pady=8)
-            
-            ctk.CTkLabel(adapter_frame, text=" ", height=5).pack()  # Spacer
-        
-        # Special Notes
-        if data.get("special_notes"):
-            notes_frame = ctk.CTkFrame(self.info_scroll, fg_color="#2a1a1a", corner_radius=8)
-            notes_frame.pack(fill="x", pady=10, padx=10)
-            
-            ctk.CTkLabel(notes_frame, text="📝 Special Notes & Warnings:",
-                        font=("Consolas", 12, "bold"), text_color=CYBER_YELLOW).pack(anchor="w", padx=15, pady=(10, 5))
-            
-            notes_text = ctk.CTkTextbox(notes_frame, height=80, font=("Consolas", 11),
-                                       fg_color="#1a0a0a", text_color="#ffcc99", wrap="word")
-            notes_text.pack(fill="x", padx=15, pady=(0, 10))
-            notes_text.insert("1.0", data["special_notes"])
-            notes_text.configure(state="disabled")
-        
-        # Image section
+        can_label = ctk.CTkLabel(can_frame, text=f"  CAN YOU PROGRAM: {can_program.upper()}  ",
+                                 font=("Consolas", 12, "bold"), text_color="#000")
+        can_label.pack(padx=15, pady=8)
+        self.create_tooltip(can_label, "Whether third-party tools can program keys")
+
+        # Reference Image (clickable to open full size)
         img_key = f"{make}_{model}_{year_range}".replace(" ", "_").replace("/", "-")
         img_path = f"{self.images_dir}/{img_key}.jpg"
         
@@ -752,8 +762,8 @@ class LuxuryClusterGuide(ctk.CTk):
             img_frame = ctk.CTkFrame(self.info_scroll, fg_color="#1a1a2e", corner_radius=8)
             img_frame.pack(fill="x", pady=10, padx=10)
             
-            ctk.CTkLabel(img_frame, text="📷 Reference Image:",
-                        font=("Consolas", 12, "bold"), text_color=CYBER_CYAN).pack(anchor="w", padx=15, pady=(10, 5))
+            ctk.CTkLabel(img_frame, text="📷 Reference Image (click to open full size):",
+                         font=("Consolas", 12, "bold"), text_color=CYBER_CYAN).pack(anchor="w", padx=15, pady=(10, 5))
             
             try:
                 img = Image.open(img_path)
@@ -762,11 +772,62 @@ class LuxuryClusterGuide(ctk.CTk):
                 img_label = ctk.CTkLabel(img_frame, image=photo, text="")
                 img_label.image = photo
                 img_label.pack(padx=15, pady=10)
-            except:
-                pass
+                img_label.bind("<Button-1>", lambda e: os.startfile(img_path))
+            except Exception as e:
+                ctk.CTkLabel(img_frame, text=f"Error loading image: {e}").pack(pady=10)
+
+        # Simple sections (non-expandable for brevity)
+        self.create_section("⚠️ CLUSTER REMOVAL", data.get("cluster_removal", "Unknown"), CYBER_RED)
+        self.create_section("📍 BCM/Control Module Location", data.get("bcm_location", "Unknown"), CYBER_CYAN)
+        self.create_section("🔧 Programming Method", data.get("programming_method", "Unknown"), CYBER_ACCENT)
+
+        # Key Type with copy button
+        key_frame = ctk.CTkFrame(self.info_scroll, fg_color="#1a1a2e", corner_radius=8)
+        key_frame.pack(fill="x", pady=5, padx=10)
+        ctk.CTkLabel(key_frame, text="🔑 Key FCC/Part Number:", font=("Consolas", 12, "bold"),
+                     text_color=CYBER_GREEN).pack(anchor="w", padx=15, pady=(10, 5))
+        key_text = data.get("key_type", "Unknown")
+        key_label = ctk.CTkLabel(key_frame, text=key_text, font=("Consolas", 12), text_color="#fff")
+        key_label.pack(anchor="w", padx=15)
+        ctk.CTkButton(key_frame, text="📋 Copy", width=100, height=30,
+                      command=lambda: self.copy_to_clipboard(key_text)).pack(pady=(5, 10), anchor="e", padx=15)
+
+        # Expandable: Locked Clusters
+        if data.get("clusters"):
+            def clusters_content(parent):
+                ctk.CTkLabel(parent, text="📋 Locked Cluster Part Numbers:", font=("Consolas", 11, "bold"),
+                             text_color=CYBER_YELLOW).pack(anchor="w", padx=10, pady=(10, 5))
+                clusters_text = ctk.CTkTextbox(parent, height=120, font=("Consolas", 10))
+                clusters_text.pack(fill="x", padx=10, pady=(0, 10))
+                cluster_list = ", ".join(data["clusters"])
+                clusters_text.insert("1.0", cluster_list)
+                clusters_text.configure(state="disabled")
+                ctk.CTkButton(parent, text="📋 Copy All Clusters", width=180,
+                              command=lambda: self.copy_to_clipboard(cluster_list)).pack(pady=(0, 10))
+            self.create_expandable_section("📋 Locked Clusters", clusters_content, CYBER_YELLOW)
+
+        # Expandable: Xhorse Adapters (clickable links)
+        if data.get("xhorse_adapters"):
+            def adapters_content(parent):
+                ctk.CTkLabel(parent, text="🔌 Required Xhorse Adapters:", font=("Consolas", 12, "bold"),
+                             text_color=CYBER_GREEN).pack(anchor="w", padx=10, pady=(10, 5))
+                for adapter in data["xhorse_adapters"]:
+                    btn = ctk.CTkButton(parent, text=adapter, fg_color="#3333ff", hover_color="#5555ff", height=35,
+                                        command=lambda a=adapter: webbrowser.open(f"https://www.google.com/search?q=Xhorse+{a.replace(' ', '+')}"))
+                    btn.pack(fill="x", padx=10, pady=5)
+            self.create_expandable_section("🔌 Required Xhorse Adapters", adapters_content, CYBER_GREEN)
+
+        # Expandable: Special Notes
+        if data.get("special_notes"):
+            def notes_content(parent):
+                notes_text = ctk.CTkTextbox(parent, height=120, font=("Consolas", 11), wrap="word")
+                notes_text.pack(fill="x", padx=10, pady=10)
+                notes_text.insert("1.0", data["special_notes"])
+                notes_text.configure(state="disabled")
+            self.create_expandable_section("📝 Special Notes & Warnings", notes_content, CYBER_YELLOW)
 
     def create_section(self, title, content, color):
-        """Helper to create info sections"""
+        """Helper to create simple non-expandable info sections"""
         section = ctk.CTkFrame(self.info_scroll, fg_color="#1a1a2e", corner_radius=8)
         section.pack(fill="x", pady=5, padx=10)
         
